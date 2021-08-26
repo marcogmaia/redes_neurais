@@ -1,31 +1,29 @@
-import scikitplot as skplt
-from sklearn.metrics import roc_auc_score, average_precision_score
-from sklearn.metrics import confusion_matrix
-from sklearn.metrics import classification_report
-from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
-from sklearn.ensemble import RandomForestClassifier
+from imblearn.under_sampling import RandomUnderSampler
+from keras.callbacks import EarlyStopping
+from keras.models import Sequential
+from numpy.random import seed
 from sklearn import model_selection
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
+from sklearn.metrics import classification_report
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import roc_auc_score, average_precision_score
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras import layers
+import imblearn
+import keras
 import matplotlib.pyplot as plt
+import numpy as np
+import optuna
+import pandas as pd
+import scikitplot as skplt
 import seaborn as sn
 import tensorflow as tf
-import pandas as pd
-import numpy as np
-import keras
-import imblearn
-from tensorflow.keras import layers
-from sklearn.preprocessing import MinMaxScaler
-from numpy.random import seed
-from keras.models import Sequential
-from keras.callbacks import EarlyStopping
-import os
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 # check version number
 # import matplotlib
 # from keras import optimizers
-# import optuna
-print(imblearn.__version__)
+# print(imblearn.__version__)
 
 
 """Os datasets estão armazenados no Google Drive"""
@@ -67,8 +65,14 @@ def get_XY_datasets(df):
     Y = np.array(df.IND_BOM_1_1.tolist())
     min_max_scaler = MinMaxScaler()
     X = min_max_scaler.fit_transform(
-        df.drop(['IND_BOM_1_1', 'IND_BOM_1_2'], axis=1).to_numpy())
+        df.drop(['Unnamed: 0', 'Unnamed: 0.1', 'IND_BOM_1_1', 'IND_BOM_1_2'], axis=1).to_numpy())
     return X, Y
+
+
+def sample_dataframe(df: pd.DataFrame, fraction: float):
+    sampled_df = df.sample(frac=fraction)
+    x, y = get_XY_datasets(sampled_df)
+    return x, y
 
 
 train_df = train_df.drop(columns_missing_from_test, axis=1)
@@ -140,8 +144,6 @@ X_train.shape, X_validation.shape, X_test.shape
 
 """# Construindo um modelo MLP iterativamente"""
 
-MAX_EPOCHS = 40
-
 
 print('avail gpus')
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
@@ -155,15 +157,13 @@ def MLPModel(n_units=[100], activation_fn="relu", output_activation_fn="sigmoid"
     model = keras.Sequential()
     # , kernel_regularizer=tf.keras.regularizers.l2(0.01)))
     print('X_train.shape: ', X_train.shape)
-    model.add(layers.Dense(n_units[0], input_dim=X_train.shape[1],
+    # input_dim: dimensão da camada de entrada
+    # units: "neurônios", será a dimensão da saída
+    model.add(layers.Dense(n_units[0], input_dim=X_train.shape[1],  # input 246
               activation=activation_fn, kernel_regularizer=tf.keras.regularizers.l2(0.01)))
+    # camada extra
     model.add(layers.Dense(12, input_dim=X_train.shape[1],
               activation=activation_fn, kernel_regularizer=tf.keras.regularizers.l2(0.01)))
-    # for h_n_units in n_units[1:]:
-    #     print(f'h_n_units: {h_n_units}')
-    #     model.add(layers.Dense(h_n_units, input_dim=X_train.shape[1], activation=activation_fn, kernel_regularizer=tf.keras.regularizers.l2(
-    #         0.01), activity_regularizer=tf.keras.regularizers.l2(0.01)))  # , kernel_regularizer=tf.keras.regularizers.l2(0.01)))
-
     # sgd = optimizers.SGD(lr=0.3, decay=1e-9, momentum=0.015, nesterov=True)
     model.add(layers.Dense(1, activation=output_activation_fn))  # Output
     model.compile(loss=loss, optimizer=optimizer, metrics=['accuracy'])
@@ -171,16 +171,16 @@ def MLPModel(n_units=[100], activation_fn="relu", output_activation_fn="sigmoid"
 
 
 # TODO fazer os paranaue
-def MLPKeras(n_units=[100], activation_fn="relu", output_activation_fn="sigmoid", loss="mean_squared_error", optimizer="sgd"):
-    model = keras.Sequential(
-        [
-            layers.Input(shape=X_train.shape[1]),
-            layers.Dense(n_units[0], input_dim),
-            layers.Dense(12, input_dim=X_train.shape[1],
-                         activation=activation_fn, kernel_regularizer=tf.keras.regularizers.l2(0.01))
-        ]
-    )
-    return model
+# def MLPKeras(n_units=[100], activation_fn="relu", output_activation_fn="sigmoid", loss="mean_squared_error", optimizer="sgd"):
+#     model = keras.Sequential(
+#         [
+#             layers.Input(shape=X_train.shape[1]),
+#             layers.Dense(n_units[0], input_dim),
+#             layers.Dense(12, input_dim=X_train.shape[1],
+#                          activation=activation_fn, kernel_regularizer=tf.keras.regularizers.l2(0.01))
+#         ]
+#     )
+#     return model
 
 
 model = MLPModel()
@@ -188,6 +188,7 @@ model = MLPModel()
 early_stopping = EarlyStopping(
     monitor="val_loss", patience=50, min_delta=0.001, restore_best_weights=True)
 
+MAX_EPOCHS = 10
 model.fit(X_train, Y_train,
           batch_size=60,
           epochs=MAX_EPOCHS,
@@ -218,11 +219,18 @@ plt.show()
 # tanh_Y_validation = np.where(Y_validation == 0, -1, Y_validation)
 # tanh_Y_test = np.where(Y_test == 0, -1, Y_test)
 
-# """# Modelo Random Forest"""
+
+# """ # ======================================== Modelo Random Forest ============================================ """
+# """ # ======================================== Modelo Random Forest ============================================ """
 
 X_validation, y_validation = get_XY_datasets(validation_df)
 
 X_test, y_test = get_XY_datasets(test_df)
+
+undersampling = RandomUnderSampler(sampling_strategy='majority')
+x_undersampled, y_undersampled = sample_dataframe(test_df, .025)
+print('undersampling shape')
+print(x_undersampled.shape, y_undersampled.shape)
 
 
 def objective(trial):
@@ -233,14 +241,12 @@ def objective(trial):
     classifier_obj = RandomForestClassifier(
         max_depth=rf_max_depth, n_estimators=rf_n_estimators
     )
-
     for step in range(100):
-        classifier_obj.fit(X_resampled, y_resampled)
-
+        # usam aqui os dados de treinamento
+        classifier_obj.fit(x_undersampled, y_undersampled)
         # Report intermediate objective value.
         intermediate_value = classifier_obj.score(X_validation, y_validation)
         trial.report(intermediate_value, step)
-
         # Handle pruning based on the intermediate value.
         if trial.should_prune():
             raise optuna.TrialPruned()
@@ -251,13 +257,13 @@ def objective(trial):
 #     max_depth=rf_max_depth, n_estimators=rf_n_estimators
 # )
 
-# study = optuna.create_study(direction="maximize")
-# study.optimize(objective, n_trials=100)
+study = optuna.create_study(direction="maximize")
+study.optimize(objective, n_trials=20)
 
+print(study.best_params)
 # study.best_params
 
 # """## Tunning 2"""
-
 
 # def objective_acc(trial):
 #     rf_n_estimators = trial.suggest_int("rf_n_estimators", 10, 500)
