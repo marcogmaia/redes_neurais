@@ -1,17 +1,21 @@
 from imblearn.under_sampling import RandomUnderSampler
-from tensorflow.keras.callbacks import EarlyStopping
-from tensorflow.keras.models import Sequential
 from numpy.random import seed
 from sklearn import model_selection
+from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
 from sklearn.metrics import classification_report
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import roc_auc_score, average_precision_score
+from sklearn.model_selection import train_test_split
+from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras import layers
-import imblearn
+from sklearn.preprocessing import StandardScaler
 from tensorflow import keras
+from tensorflow.keras import layers
+from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.models import Sequential
+import imblearn
 import matplotlib.pyplot as plt
 import numpy as np
 import optuna
@@ -68,17 +72,17 @@ columns_missing_from_test
 
 
 def get_XY_datasets(df):
-    Y = np.array(df.IND_BOM_1_1.tolist())
+    ys = np.array(df.IND_BOM_1_1.tolist())
     min_max_scaler = MinMaxScaler()
-    X = min_max_scaler.fit_transform(
+    xs = min_max_scaler.fit_transform(
         df.drop(['Unnamed: 0', 'Unnamed: 0.1', 'IND_BOM_1_1', 'IND_BOM_1_2'], axis=1).to_numpy())
-    return X, Y
+    return xs, ys
 
 
 def sample_dataframe(df: pd.DataFrame, fraction: float):
     sampled_df = df.sample(frac=fraction)
-    x, y = get_XY_datasets(sampled_df)
-    return x, y
+    xs, ys = get_XY_datasets(sampled_df)
+    return xs, ys
 
 
 train_df = train_df.drop(columns_missing_from_test, axis=1)
@@ -360,28 +364,23 @@ print(study.best_params)
 
 #undersampling2 = RandomUnderSampler(sampling_strategy='majority')
 x_train_undersampled, y_train_undersampled = sample_dataframe(train_df, .0025)
-x_validation_undersampled, y_validation_undersampled = sample_dataframe(validation_df, .0025)
+x_validation_undersampled, y_validation_undersampled = sample_dataframe(
+    validation_df, .05)
 print('undersampling shape')
 print(x_train_undersampled.shape, y_train_undersampled.shape)
 print(x_validation_undersampled.shape, y_validation_undersampled.shape)
 
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.neural_network import MLPClassifier
-from sklearn.metrics import confusion_matrix
-from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
-from sklearn.metrics import roc_auc_score, average_precision_score
 
+# y_train_undersampled = train_df.iloc[:, 0].values
+# x_train_undersampled = train_df.iloc[:, 1:].values
 
-y_train_undersampled = train_df.iloc[:,0].values
-x_train_undersampled = train_df.iloc[:,1:].values
-
-y_validation_undersampled = validation_df.iloc[:,0].values
-x_validation_undersampled = validation_df.iloc[:,1:].values
+# y_validation_undersampled = validation_df.iloc[:, 0].values
+# x_validation_undersampled = validation_df.iloc[:, 1:].values
 
 scaler = StandardScaler()
 x_train_undersampled = scaler.fit_transform(x_train_undersampled)
 x_validation_undersampled = scaler.fit_transform(x_validation_undersampled)
+
 
 def extract_final_losses(history):
     """Função para extrair o melhor loss de treino e validação.
@@ -398,6 +397,7 @@ def extract_final_losses(history):
     idx_min_val_loss = np.argmin(val_loss)
     return {'train_loss': train_loss[idx_min_val_loss], 'val_loss': val_loss[idx_min_val_loss]}
 
+
 def plot_training_error_curves(history):
     """Função para plotar as curvas de erro do treinamento da rede neural.
 
@@ -413,9 +413,11 @@ def plot_training_error_curves(history):
     fig, ax = plt.subplots()
     ax.plot(train_loss, label='Train')
     ax.plot(val_loss, label='Validation')
-    ax.set(title='Training and Validation Error Curves', xlabel='Epochs', ylabel='Loss (MSE)')
+    ax.set(title='Training and Validation Error Curves',
+           xlabel='Epochs', ylabel='Loss (MSE)')
     ax.legend()
     plt.show()
+
 
 def compute_performance_metrics(y, y_pred_class, y_pred_scores=None):
     accuracy = accuracy_score(y, y_pred_class)
@@ -432,26 +434,32 @@ def compute_performance_metrics(y, y_pred_class, y_pred_scores=None):
         performance_metrics = performance_metrics + (auroc, aupr)
     return performance_metrics
 
+
 def print_metrics_summary(accuracy, recall, precision, f1, auroc=None, aupr=None):
     print()
     print("{metric:<18}{value:.4f}".format(metric="Accuracy:", value=accuracy))
     print("{metric:<18}{value:.4f}".format(metric="Recall:", value=recall))
-    print("{metric:<18}{value:.4f}".format(metric="Precision:", value=precision))
+    print("{metric:<18}{value:.4f}".format(
+        metric="Precision:", value=precision))
     print("{metric:<18}{value:.4f}".format(metric="F1:", value=f1))
     if auroc is not None:
         print("{metric:<18}{value:.4f}".format(metric="AUROC:", value=auroc))
     if aupr is not None:
         print("{metric:<18}{value:.4f}".format(metric="AUPR:", value=aupr))
 
-from sklearn.ensemble import GradientBoostingClassifier
 
-#variando n_estimators (segundo a documentação valores maiores são melhores), max_depth com valor padrão
-#n_estimators sao iterações? original 150
-gb_clf = GradientBoostingClassifier(learning_rate=0.4, n_estimators=5, max_depth=3, verbose=10)
+# y_valid = validation_df.iloc[:,0].values
+# X_valid = validation_df.iloc[:,1:].values
+
+# variando n_estimators (segundo a documentação valores maiores são melhores), max_depth com valor padrão
+# n_estimators sao iterações? original 150
+gb_clf = GradientBoostingClassifier(
+    learning_rate=0.4, n_estimators=5, max_depth=3, verbose=10)
 gb_clf.fit(x_train_undersampled, y_train_undersampled)
 gb_pred_class = gb_clf.predict(x_validation_undersampled)
 gb_pred_scores = gb_clf.predict_proba(x_validation_undersampled)
-accuracy, recall, precision, f1, auroc, aupr = compute_performance_metrics(y_valid, gb_pred_class, gb_pred_scores)
+accuracy, recall, precision, f1, auroc, aupr = compute_performance_metrics(
+    y_validation_undersampled, gb_pred_class, gb_pred_scores)
 print('Performance no conjunto de validação:')
 print_metrics_summary(accuracy, recall, precision, f1, auroc, aupr)
 print('Matriz de confusão no conjunto de validação:')
