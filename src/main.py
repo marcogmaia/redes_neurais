@@ -1,6 +1,6 @@
 from imblearn.under_sampling import RandomUnderSampler
-from keras.callbacks import EarlyStopping
-from keras.models import Sequential
+from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.models import Sequential
 from numpy.random import seed
 from sklearn import model_selection
 from sklearn.ensemble import RandomForestClassifier
@@ -11,7 +11,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras import layers
 import imblearn
-import keras
+from tensorflow import keras
 import matplotlib.pyplot as plt
 import numpy as np
 import optuna
@@ -33,17 +33,23 @@ import tensorflow as tf
 
 testando = False
 
-datasets_dir = "..\projeto_final_neurais\data"
+"Para Marco"
+#datasets_dir = "..\projeto_final_neurais\data"
+
+"Para Hugo"
+datasets_dir = "./data/"
+
 train_set_path = None
 validation_set_path = None
 test_set_path = None
 # Verificar nome do arquivo de treino. "É training_data", não "traning_data"
+
 if testando:
     train_set_path = f"{datasets_dir}/tiny-data.csv"
     validation_set_path = f"{datasets_dir}/tiny-data.csv"
     test_set_path = f"{datasets_dir}/tiny-data.csv"
 else:
-    train_set_path = f"{datasets_dir}/training_data.csv"
+    train_set_path = datasets_dir + "training_data.csv"
     validation_set_path = f"{datasets_dir}/validation_data.csv"
     test_set_path = f"{datasets_dir}/test_data.csv"
 
@@ -142,9 +148,6 @@ X_test, Y_test = get_XY_datasets(test_df)
 
 X_train.shape, X_validation.shape, X_test.shape
 
-"""# Construindo um modelo MLP iterativamente"""
-
-
 print('avail gpus')
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
@@ -152,6 +155,11 @@ tf.random.set_seed(1)
 
 seed(2)
 
+""" MLP """
+"""# Construindo um modelo MLP iterativamente"""
+""" MLP """
+
+'''
 
 def MLPModel(n_units=[100], activation_fn="relu", output_activation_fn="sigmoid", loss="mean_squared_error", optimizer="sgd"):
     model = keras.Sequential()
@@ -198,7 +206,8 @@ model.fit(X_train, Y_train,
 
 test_loss, test_acc = model.evaluate(
     X_test, Y_test, batch_size=X_test.shape[0]//50)
-print(test_loss, test_acc)
+print("Loss: " + test_loss)
+print("Accuracy: " + test_acc)
 
 # tf.keras.backend.clear_session()
 
@@ -219,9 +228,12 @@ plt.show()
 # tanh_Y_validation = np.where(Y_validation == 0, -1, Y_validation)
 # tanh_Y_test = np.where(Y_test == 0, -1, Y_test)
 
+'''
 
 # """ # ======================================== Modelo Random Forest ============================================ """
 # """ # ======================================== Modelo Random Forest ============================================ """
+
+'''
 
 X_validation, y_validation = get_XY_datasets(validation_df)
 
@@ -340,3 +352,107 @@ print(study.best_params)
 # print(confusion_matrix(y_test, y_pred))
 # sn.heatmap(confusion_matrix(y_test, y_pred, normalize='true'), annot=True)
 # print(classification_report(y_test, y_pred))
+
+'''
+
+""" GRADIENT BOOST """
+""" GRADIENT BOOST """
+
+#undersampling2 = RandomUnderSampler(sampling_strategy='majority')
+x_train_undersampled, y_train_undersampled = sample_dataframe(train_df, .0025)
+x_validation_undersampled, y_validation_undersampled = sample_dataframe(validation_df, .0025)
+print('undersampling shape')
+print(x_train_undersampled.shape, y_train_undersampled.shape)
+print(x_validation_undersampled.shape, y_validation_undersampled.shape)
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
+from sklearn.metrics import roc_auc_score, average_precision_score
+
+
+y_train_undersampled = train_df.iloc[:,0].values
+x_train_undersampled = train_df.iloc[:,1:].values
+
+y_validation_undersampled = validation_df.iloc[:,0].values
+x_validation_undersampled = validation_df.iloc[:,1:].values
+
+scaler = StandardScaler()
+x_train_undersampled = scaler.fit_transform(x_train_undersampled)
+x_validation_undersampled = scaler.fit_transform(x_validation_undersampled)
+
+def extract_final_losses(history):
+    """Função para extrair o melhor loss de treino e validação.
+
+    Argumento(s):
+    history -- Objeto retornado pela função fit do keras.
+
+    Retorno:
+    Dicionário contendo o melhor loss de treino e de validação baseado
+    no menor loss de validação.
+    """
+    train_loss = history.history['loss']
+    val_loss = history.history['val_loss']
+    idx_min_val_loss = np.argmin(val_loss)
+    return {'train_loss': train_loss[idx_min_val_loss], 'val_loss': val_loss[idx_min_val_loss]}
+
+def plot_training_error_curves(history):
+    """Função para plotar as curvas de erro do treinamento da rede neural.
+
+    Argumento(s):
+    history -- Objeto retornado pela função fit do keras.
+
+    Retorno:
+    A função gera o gráfico do treino da rede e retorna None.
+    """
+    train_loss = history.history['loss']
+    val_loss = history.history['val_loss']
+
+    fig, ax = plt.subplots()
+    ax.plot(train_loss, label='Train')
+    ax.plot(val_loss, label='Validation')
+    ax.set(title='Training and Validation Error Curves', xlabel='Epochs', ylabel='Loss (MSE)')
+    ax.legend()
+    plt.show()
+
+def compute_performance_metrics(y, y_pred_class, y_pred_scores=None):
+    accuracy = accuracy_score(y, y_pred_class)
+    recall = recall_score(y, y_pred_class, average='micro')
+    precision = precision_score(y, y_pred_class, average='micro')
+    f1 = f1_score(y, y_pred_class, average='micro')
+    performance_metrics = (accuracy, recall, precision, f1)
+    if y_pred_scores is not None:
+        skplt.metrics.plot_ks_statistic(y, y_pred_scores)
+        plt.show()
+        y_pred_scores = y_pred_scores[:, 1]
+        auroc = roc_auc_score(y, y_pred_scores)
+        aupr = average_precision_score(y, y_pred_scores)
+        performance_metrics = performance_metrics + (auroc, aupr)
+    return performance_metrics
+
+def print_metrics_summary(accuracy, recall, precision, f1, auroc=None, aupr=None):
+    print()
+    print("{metric:<18}{value:.4f}".format(metric="Accuracy:", value=accuracy))
+    print("{metric:<18}{value:.4f}".format(metric="Recall:", value=recall))
+    print("{metric:<18}{value:.4f}".format(metric="Precision:", value=precision))
+    print("{metric:<18}{value:.4f}".format(metric="F1:", value=f1))
+    if auroc is not None:
+        print("{metric:<18}{value:.4f}".format(metric="AUROC:", value=auroc))
+    if aupr is not None:
+        print("{metric:<18}{value:.4f}".format(metric="AUPR:", value=aupr))
+
+from sklearn.ensemble import GradientBoostingClassifier
+
+#variando n_estimators (segundo a documentação valores maiores são melhores), max_depth com valor padrão
+#n_estimators sao iterações? original 150
+gb_clf = GradientBoostingClassifier(learning_rate=0.4, n_estimators=5, max_depth=3, verbose=10)
+gb_clf.fit(x_train_undersampled, y_train_undersampled)
+gb_pred_class = gb_clf.predict(x_validation_undersampled)
+gb_pred_scores = gb_clf.predict_proba(x_validation_undersampled)
+accuracy, recall, precision, f1, auroc, aupr = compute_performance_metrics(y_valid, gb_pred_class, gb_pred_scores)
+print('Performance no conjunto de validação:')
+print_metrics_summary(accuracy, recall, precision, f1, auroc, aupr)
+print('Matriz de confusão no conjunto de validação:')
+print(confusion_matrix(y_validation_undersampled, gb_pred_class))
