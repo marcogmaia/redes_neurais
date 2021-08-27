@@ -163,7 +163,8 @@ seed(2)
 """# Construindo um modelo MLP iterativamente"""
 """ MLP """
 
-'''
+# '''
+
 
 def MLPModel(n_units=[100], activation_fn="relu", output_activation_fn="sigmoid", loss="mean_squared_error", optimizer="sgd"):
     model = keras.Sequential()
@@ -238,7 +239,6 @@ plt.show()
 # """ # ======================================== Modelo Random Forest ============================================ """
 
 '''
-
 X_validation, y_validation = get_XY_datasets(validation_df)
 
 X_test, y_test = get_XY_datasets(test_df)
@@ -275,97 +275,15 @@ def objective(trial):
 
 study = optuna.create_study(direction="maximize")
 study.optimize(objective, n_trials=20)
-
-print(study.best_params)
-# study.best_params
-
-# """## Tunning 2"""
-
-# def objective_acc(trial):
-#     rf_n_estimators = trial.suggest_int("rf_n_estimators", 10, 500)
-#     rf_max_depth = trial.suggest_int("rf_max_depth", 1, 40, log=True)
-#     print("Running for {0} estimators and {1} of depth".format(
-#         rf_n_estimators, rf_max_depth))
-#     classifier_obj = RandomForestClassifier(
-#         max_depth=rf_max_depth, n_estimators=rf_n_estimators
-#     )
-
-#     for step in range(100):
-#         classifier_obj.fit(X_resampled, y_resampled)
-#         _y_pred = classifier_obj.predict(X_validation)
-
-#         # Report intermediate objective value.
-#         intermediate_value = accuracy_score(y_validation, _y_pred)
-#         trial.report(intermediate_value, step)
-
-#         # Handle pruning based on the intermediate value.
-#         if trial.should_prune():
-#             raise optuna.TrialPruned()
-#         return intermediate_value
-
-
-# study2 = optuna.create_study(direction="maximize")
-# study2.optimize(objective_acc, n_trials=50)
-
-# clf = RandomForestClassifier(max_depth=20, random_state=0, min_samples_leaf=1)
-
-# clf.fit(X_resampled, y_resampled)
-
-# clf.score(X_test, y_test)
-
-
-# def compute_performance_metrics(y, y_pred_class, y_pred_scores=None):
-#     accuracy = accuracy_score(y, y_pred_class)
-#     recall = recall_score(y, y_pred_class, average='micro')
-#     precision = precision_score(y, y_pred_class, average='micro')
-#     f1 = f1_score(y, y_pred_class, average='micro')
-#     performance_metrics = (accuracy, recall, precision, f1)
-#     if y_pred_scores is not None:
-#         skplt.metrics.plot_ks_statistic(y, y_pred_scores)
-#         plt.show()
-#         y_pred_scores = y_pred_scores[:, 1]
-#         auroc = roc_auc_score(y, y_pred_scores)
-#         aupr = average_precision_score(y, y_pred_scores)
-#         performance_metrics = performance_metrics + (auroc, aupr)
-#     return performance_metrics
-
-
-# def print_metrics_summary(accuracy, recall, precision, f1, auroc=None, aupr=None):
-#     print()
-#     print("{metric:<18}{value:.4f}".format(metric="Accuracy:", value=accuracy))
-#     print("{metric:<18}{value:.4f}".format(metric="Recall:", value=recall))
-#     print("{metric:<18}{value:.4f}".format(
-#         metric="Precision:", value=precision))
-#     print("{metric:<18}{value:.4f}".format(metric="F1:", value=f1))
-#     if auroc is not None:
-#         print("{metric:<18}{value:.4f}".format(metric="AUROC:", value=auroc))
-#     if aupr is not None:
-#         print("{metric:<18}{value:.4f}".format(metric="AUPR:", value=aupr))
-
-
-# pred_class = clf.predict(X_test)
-# pred_scores = clf.predict_proba(X_test)
-# accuracy, recall, precision, f1, auroc, aupr = compute_performance_metrics(
-#     y_test, pred_class, pred_scores)
-# print_metrics_summary(accuracy, recall, precision, f1, auroc, aupr)
-
-# clf.predict(X_test)
-
-
-# y_pred = np.array([1 if x > 0.75 else 0 for x in clf.predict(X_test)])
-# print(confusion_matrix(y_test, y_pred))
-# sn.heatmap(confusion_matrix(y_test, y_pred, normalize='true'), annot=True)
-# print(classification_report(y_test, y_pred))
-
-'''
+print(study.best_params, study.best_value)
 
 """ GRADIENT BOOST """
 """ GRADIENT BOOST """
 
 #undersampling2 = RandomUnderSampler(sampling_strategy='majority')
-x_train_undersampled, y_train_undersampled = sample_dataframe(train_df, .0025)
+x_train_undersampled, y_train_undersampled = sample_dataframe(train_df, .1)
 x_validation_undersampled, y_validation_undersampled = sample_dataframe(
-    validation_df, .05)
+    validation_df, .1)
 print('undersampling shape')
 print(x_train_undersampled.shape, y_train_undersampled.shape)
 print(x_validation_undersampled.shape, y_validation_undersampled.shape)
@@ -454,7 +372,7 @@ def print_metrics_summary(accuracy, recall, precision, f1, auroc=None, aupr=None
 # variando n_estimators (segundo a documentação valores maiores são melhores), max_depth com valor padrão
 # n_estimators sao iterações? original 150
 gb_clf = GradientBoostingClassifier(
-    learning_rate=0.4, n_estimators=5, max_depth=3, verbose=10)
+    learning_rate=0.2, n_estimators=200, max_depth=6, verbose=10)
 gb_clf.fit(x_train_undersampled, y_train_undersampled)
 gb_pred_class = gb_clf.predict(x_validation_undersampled)
 gb_pred_scores = gb_clf.predict_proba(x_validation_undersampled)
@@ -464,3 +382,8 @@ print('Performance no conjunto de validação:')
 print_metrics_summary(accuracy, recall, precision, f1, auroc, aupr)
 print('Matriz de confusão no conjunto de validação:')
 print(confusion_matrix(y_validation_undersampled, gb_pred_class))
+
+plt.clf()
+sn.heatmap(confusion_matrix(y_validation_undersampled,
+           gb_pred_class, normalize='true'), annot=True)
+plt.show()
